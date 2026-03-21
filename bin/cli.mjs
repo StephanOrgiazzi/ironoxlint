@@ -24,11 +24,11 @@ function printHelp() {
   process.stdout.write(
     [
       "Usage:",
-      "  ironlint init [--force]",
+      "  ironoxlint init [--force]",
       "",
       "Examples:",
-      "  ironlint init",
-      "  ironlint init --force",
+      "  ironoxlint init",
+      "  ironoxlint init --force",
       "",
     ].join("\n"),
   );

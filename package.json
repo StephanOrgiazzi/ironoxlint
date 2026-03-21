@@ -1,5 +1,5 @@
 {
-  "name": "ironlint",
+  "name": "ironoxlint",
   "version": "0.1.0",
   "description": "Strict, opinionated shared Oxlint/Oxfmt config for React projects",
   "type": "module",
@@ -11,7 +11,7 @@
     "README.md"
   ],
   "bin": {
-    "ironlint": "bin/cli.mjs"
+    "ironoxlint": "bin/cli.mjs"
   },
   "exports": {
     "./oxlint/strict-react.json": "./oxlint/strict-react.json",

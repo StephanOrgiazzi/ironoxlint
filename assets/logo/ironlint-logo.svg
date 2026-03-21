@@ -14,6 +14,6 @@
   <path d="M158 78L92 180H146L124 242L228 132H174L196 78H158Z" fill="url(#bolt)"/>
   <path d="M92 180H146L124 242L228 132H174" stroke="#0D141B" stroke-width="8" stroke-linejoin="round"/>
 
-  <text x="340" y="152" fill="#1A2430" font-family="Segoe UI, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="-2">ironlint</text>
-  <text x="344" y="202" fill="#5D6B7A" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="600" letter-spacing="2">STRICT LINTING FOR SOLID CODE</text>
+  <text x="340" y="152" fill="#1A2430" font-family="Segoe UI, Arial, sans-serif" font-size="96" font-weight="800" letter-spacing="-2">ironoxlint</text>
+  <text x="344" y="202" fill="#5D6B7A" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="600" letter-spacing="2">STRICT OXLINT FOR SOLID CODE</text>
 </svg>
