@@ -1,5 +1,7 @@
 # ironlint
 
+![ironlint logo](assets/logo/ironlint-logo.svg)
+
 `ironlint` is a strict, opinionated linting setup that helps AI agents write maintainable, production-grade code.
 
 Most repos are hard for agents (and developers) for one reason: too many unwritten conventions.
