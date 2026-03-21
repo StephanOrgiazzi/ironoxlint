@@ -1,0 +1,85 @@
+{
+  "jsPlugins": [
+    { "name": "sonarjs", "specifier": "eslint-plugin-sonarjs" },
+    { "name": "perfectionist", "specifier": "eslint-plugin-perfectionist" }
+  ],
+  "rules": {
+    "curly": ["error", "all"],
+    "eqeqeq": ["error", "always"],
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "no-eval": "error",
+    "no-new-func": "error",
+    "no-warning-comments": [
+      "error",
+      { "terms": ["todo", "fixme", "hack", "xxx"], "location": "anywhere" }
+    ],
+
+    "complexity": ["error", 12],
+    "max-params": ["error", 4],
+    "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 100, "skipBlankLines": true, "skipComments": true, "IIFEs": true }
+    ],
+
+    "no-else-return": "error",
+    "no-nested-ternary": "error",
+    "no-implicit-coercion": "error",
+    "no-unneeded-ternary": "error",
+    "no-useless-return": "error",
+    "no-param-reassign": "error",
+    "consistent-return": "error",
+    "default-case": "error",
+    "default-case-last": "error",
+
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-duplicate-imports": "error",
+
+    "perfectionist/sort-imports": [
+      "error",
+      {
+        "environment": "bun",
+        "type": "natural",
+        "order": "asc",
+        "groups": [
+          "type-import",
+          ["value-builtin", "value-external"],
+          "type-internal",
+          "value-internal",
+          ["type-parent", "type-sibling", "type-index"],
+          ["value-parent", "value-sibling", "value-index"],
+          "ts-equals-import",
+          "unknown"
+        ]
+      }
+    ],
+    "perfectionist/sort-modules": [
+      "error",
+      {
+        "type": "natural",
+        "order": "asc",
+        "groups": [
+          ["declare-interface", "declare-type"],
+          ["export-interface", "export-type"],
+          ["interface", "type"],
+          "declare-enum",
+          "export-enum",
+          "enum",
+          "declare-class",
+          "class",
+          "export-class",
+          "declare-function",
+          "export-function",
+          "function"
+        ]
+      }
+    ],
+
+    "sonarjs/unused-import": "error",
+    "sonarjs/no-dead-store": "error",
+    "sonarjs/no-identical-conditions": "error",
+    "sonarjs/no-duplicated-branches": "error",
+    "sonarjs/no-ignored-return": "error"
+  }
+}
