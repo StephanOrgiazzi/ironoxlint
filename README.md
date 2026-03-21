@@ -1,6 +1,6 @@
 # ironoxlint
 
-![ironoxlint logo](assets/logo/ironlint-logo.svg)
+![ironoxlint logo](https://raw.githubusercontent.com/StephanOrgiazzi/ironoxlint/master/assets/logo/ironoxlint-logo.svg)
 
 `ironoxlint` is a strict, opinionated linting setup that helps AI agents write maintainable, production-grade code.
 
