@@ -39,8 +39,8 @@ npm run format
 ```json
 {
   "scripts": {
-    "lint": "oxlint . -c ./node_modules/ironoxlint/oxlint/strict-react.json --ignore-path .gitignore && oxfmt . -c ./node_modules/ironoxlint/oxfmt/strict.mjs --check --ignore-path .gitignore",
-    "format": "oxlint . -c ./node_modules/ironoxlint/oxlint/strict-react.json --fix --ignore-path .gitignore && oxfmt . -c ./node_modules/ironoxlint/oxfmt/strict.mjs --ignore-path .gitignore"
+    "lint": "ironoxlint lint",
+    "format": "ironoxlint format"
   }
 }
 ```

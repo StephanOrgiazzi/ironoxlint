@@ -12,26 +12,45 @@ const packageJsonPath = path.join(packageRoot, "package.json");
 const selfManifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 const packageName = selfManifest.name;
 const packageVersion = selfManifest.version;
+const oxlintConfigPath = path.join(packageRoot, "oxlint", "strict-react.json");
+const oxfmtConfigPath = path.join(packageRoot, "oxfmt", "strict.json");
 
-const lintScript =
-  `oxlint . -c ./node_modules/${packageName}/oxlint/strict-react.json --ignore-path .gitignore ` +
-  `&& oxfmt . -c ./node_modules/${packageName}/oxfmt/strict.mjs --check --ignore-path .gitignore`;
-const formatScript =
-  `oxlint . -c ./node_modules/${packageName}/oxlint/strict-react.json --fix --ignore-path .gitignore ` +
-  `&& oxfmt . -c ./node_modules/${packageName}/oxfmt/strict.mjs --ignore-path .gitignore`;
+const lintScript = `${packageName} lint`;
+const formatScript = `${packageName} format`;
 
-function printHelp() {
-  process.stdout.write(
-    [
-      "Usage:",
-      "  ironoxlint init [--force]",
-      "",
-      "Examples:",
-      "  ironoxlint init",
-      "  ironoxlint init --force",
-      "",
-    ].join("\n"),
-  );
+function applyScriptUpdates(manifest, force) {
+  const updates = [
+    ["lint", lintScript],
+    ["format", formatScript],
+  ];
+  const created = [];
+  const overwritten = [];
+  const skipped = [];
+
+  for (const [key, value] of updates) {
+    const current = manifest.scripts[key];
+
+    if (typeof current === "undefined") {
+      manifest.scripts[key] = value;
+      created.push(key);
+      continue;
+    }
+
+    if (current === value) {
+      skipped.push(key);
+      continue;
+    }
+
+    if (!force) {
+      skipped.push(key);
+      continue;
+    }
+
+    manifest.scripts[key] = value;
+    overwritten.push(key);
+  }
+
+  return { created, overwritten, skipped };
 }
 
 function detectPackageManager(cwd) {
@@ -45,6 +64,67 @@ function detectPackageManager(cwd) {
     return "yarn";
   }
   return "npm";
+}
+
+function ensureObjectProperty(target, key) {
+  if (!target[key] || typeof target[key] !== "object") {
+    target[key] = {};
+  }
+}
+
+function findDependencyBin(packageId) {
+  let cursor = packageRoot;
+  const relativeBinPath = path.join(packageId, "bin", packageId);
+
+  while (true) {
+    const candidate = path.join(cursor, "node_modules", relativeBinPath);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+
+    const parent = path.dirname(cursor);
+    if (parent === cursor) {
+      break;
+    }
+    cursor = parent;
+  }
+
+  process.stderr.write(
+    `Could not resolve ${packageId} binary from ${packageName}. Reinstall dependencies and retry.\n`,
+  );
+  return null;
+}
+
+function initProject(args) {
+  const cwd = process.cwd();
+  const force = args.includes("--force");
+  const cwdPackageJson = path.join(cwd, "package.json");
+  const manifest = parseManifestFile(cwdPackageJson);
+  if (!manifest) {
+    return 1;
+  }
+
+  ensureObjectProperty(manifest, "scripts");
+  ensureObjectProperty(manifest, "devDependencies");
+
+  const { created, overwritten, skipped } = applyScriptUpdates(manifest, force);
+  const dependencyChanged = updateSelfDependency(manifest);
+
+  if (created.length === 0 && overwritten.length === 0 && !dependencyChanged) {
+    process.stdout.write(
+      "No changes applied. Use --force to overwrite existing lint/format scripts.\n",
+    );
+    return 0;
+  }
+
+  fs.writeFileSync(cwdPackageJson, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  printInitSummary(created, overwritten, skipped);
+
+  if (!dependencyChanged) {
+    return 0;
+  }
+
+  return installSelf(cwd);
 }
 
 function installSelf(cwd) {
@@ -75,79 +155,41 @@ function installSelf(cwd) {
   return typeof result.status === "number" ? result.status : 1;
 }
 
-function initProject(args) {
-  const force = args.includes("--force");
-  const cwd = process.cwd();
-  const cwdPackageJson = path.join(cwd, "package.json");
-
-  if (!fs.existsSync(cwdPackageJson)) {
+function parseManifestFile(filePath) {
+  if (!fs.existsSync(filePath)) {
     process.stderr.write(
       "No package.json found in current directory. Run this command at your project root.\n",
     );
-    return 1;
+    return null;
   }
 
-  let manifest;
   try {
-    manifest = JSON.parse(fs.readFileSync(cwdPackageJson, "utf8"));
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
     process.stderr.write("Could not parse package.json. Fix JSON syntax and retry.\n");
-    return 1;
+    return null;
   }
+}
 
-  if (!manifest.scripts || typeof manifest.scripts !== "object") {
-    manifest.scripts = {};
-  }
-  if (!manifest.devDependencies || typeof manifest.devDependencies !== "object") {
-    manifest.devDependencies = {};
-  }
+function printHelp() {
+  process.stdout.write(
+    [
+      "Usage:",
+      "  ironoxlint init [--force]",
+      "  ironoxlint lint",
+      "  ironoxlint format",
+      "",
+      "Examples:",
+      "  ironoxlint init",
+      "  ironoxlint init --force",
+      "  ironoxlint lint",
+      "  ironoxlint format",
+      "",
+    ].join("\n"),
+  );
+}
 
-  const updates = [
-    ["lint", lintScript],
-    ["format", formatScript],
-  ];
-  const created = [];
-  const overwritten = [];
-  const skipped = [];
-
-  for (const [key, value] of updates) {
-    const current = manifest.scripts[key];
-
-    if (typeof current === "undefined") {
-      manifest.scripts[key] = value;
-      created.push(key);
-      continue;
-    }
-
-    if (current === value) {
-      skipped.push(key);
-      continue;
-    }
-
-    if (force) {
-      manifest.scripts[key] = value;
-      overwritten.push(key);
-    } else {
-      skipped.push(key);
-    }
-  }
-
-  const currentVersion = manifest.devDependencies[packageName];
-  const requiredVersion = `^${packageVersion}`;
-  const dependencyChanged = currentVersion !== requiredVersion;
-  if (dependencyChanged) {
-    manifest.devDependencies[packageName] = requiredVersion;
-  }
-
-  if (created.length === 0 && overwritten.length === 0 && !dependencyChanged) {
-    process.stdout.write(
-      "No changes applied. Use --force to overwrite existing lint/format scripts.\n",
-    );
-    return 0;
-  }
-
-  fs.writeFileSync(cwdPackageJson, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-
+function printInitSummary(created, overwritten, skipped) {
   process.stdout.write("Updated package.json scripts.\n");
   if (created.length > 0) {
     process.stdout.write(`Created: ${created.join(", ")}\n`);
@@ -158,20 +200,79 @@ function initProject(args) {
   if (skipped.length > 0) {
     process.stdout.write(`Skipped: ${skipped.join(", ")}\n`);
   }
-  if (dependencyChanged) {
-    const installExit = installSelf(cwd);
-    if (installExit !== 0) {
-      return installExit;
-    }
+}
+
+function runFormat(cwd) {
+  const oxlintBin = findDependencyBin("oxlint");
+  const oxfmtBin = findDependencyBin("oxfmt");
+  if (!oxlintBin || !oxfmtBin) {
+    return 1;
   }
 
-  return 0;
+  const lintFixExit = runNodeScript(
+    oxlintBin,
+    [".", "-c", oxlintConfigPath, "--fix", "--ignore-path", ".gitignore"],
+    cwd,
+  );
+  if (lintFixExit !== 0) {
+    return lintFixExit;
+  }
+
+  return runNodeScript(oxfmtBin, [".", "-c", oxfmtConfigPath, "--ignore-path", ".gitignore"], cwd);
+}
+
+function runLint(cwd) {
+  const oxlintBin = findDependencyBin("oxlint");
+  const oxfmtBin = findDependencyBin("oxfmt");
+  if (!oxlintBin || !oxfmtBin) {
+    return 1;
+  }
+
+  const lintExit = runNodeScript(
+    oxlintBin,
+    [".", "-c", oxlintConfigPath, "--ignore-path", ".gitignore"],
+    cwd,
+  );
+  if (lintExit !== 0) {
+    return lintExit;
+  }
+
+  return runNodeScript(
+    oxfmtBin,
+    [".", "-c", oxfmtConfigPath, "--check", "--ignore-path", ".gitignore"],
+    cwd,
+  );
+}
+
+function runNodeScript(scriptPath, args, cwd) {
+  const result = spawnSync(process.execPath, [scriptPath, ...args], {
+    cwd,
+    stdio: "inherit",
+  });
+  return typeof result.status === "number" ? result.status : 1;
+}
+
+function updateSelfDependency(manifest) {
+  const currentVersion = manifest.devDependencies[packageName];
+  const requiredVersion = `^${packageVersion}`;
+  const dependencyChanged = currentVersion !== requiredVersion;
+
+  if (dependencyChanged) {
+    manifest.devDependencies[packageName] = requiredVersion;
+  }
+
+  return dependencyChanged;
 }
 
 if (command === "init") {
   process.exit(initProject(rest));
 }
+if (command === "lint") {
+  process.exit(runLint(process.cwd()));
+}
+if (command === "format") {
+  process.exit(runFormat(process.cwd()));
+}
 
 printHelp();
 process.exit(1);
-
