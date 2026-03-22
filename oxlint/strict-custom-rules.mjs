@@ -22,6 +22,22 @@ function isAllowedHookFile(filePath) {
   );
 }
 
+function isImportedIdentifier(specifier, importedBindingNames) {
+  return (
+    specifier.type === "ExportSpecifier" &&
+    specifier.local?.type === "Identifier" &&
+    importedBindingNames.has(specifier.local.name)
+  );
+}
+
+function isImportedVariableAlias(declaration, importedBindingNames) {
+  return (
+    declaration.id?.type === "Identifier" &&
+    declaration.init?.type === "Identifier" &&
+    importedBindingNames.has(declaration.init.name)
+  );
+}
+
 function isSrcFile(filePath) {
   return filePath.includes("/src/");
 }
@@ -40,6 +56,14 @@ function isTypesFile(filePath) {
 
 function normalizePath(filePath) {
   return filePath.split(path.sep).join("/");
+}
+
+function reportAliasedReExport(context, node) {
+  context.report({
+    node,
+    message:
+      "Aliased re-export wrappers are forbidden. Import symbols where needed and export only local implementations.",
+  });
 }
 
 function reportProgramNode(context, node, message) {
@@ -75,6 +99,55 @@ const noReexportsRule = {
             message:
               "Re-exports are forbidden. Import symbols where needed and export only local declarations.",
           });
+        }
+      },
+    };
+  },
+};
+
+const noAliasedReExportRule = {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "Disallow aliased re-export wrappers of imported symbols.",
+    },
+    schema: [],
+  },
+  create(context) {
+    const filePath = getFilename(context);
+    if (!isSrcFile(filePath) || isTestFile(filePath)) {
+      return {};
+    }
+
+    const importedBindingNames = new Set();
+
+    return {
+      ImportDeclaration(node) {
+        for (const specifier of node.specifiers) {
+          if (specifier.local?.type === "Identifier") {
+            importedBindingNames.add(specifier.local.name);
+          }
+        }
+      },
+      ExportNamedDeclaration(node) {
+        if (node.source) {
+          return;
+        }
+
+        for (const specifier of node.specifiers ?? []) {
+          if (isImportedIdentifier(specifier, importedBindingNames)) {
+            reportAliasedReExport(context, specifier);
+          }
+        }
+
+        if (node.declaration?.type !== "VariableDeclaration") {
+          return;
+        }
+
+        for (const declaration of node.declaration.declarations) {
+          if (isImportedVariableAlias(declaration, importedBindingNames)) {
+            reportAliasedReExport(context, declaration);
+          }
         }
       },
     };
@@ -233,6 +306,7 @@ const preferTypesFileRule = {
 export default {
   rules: {
     "hook-file-placement": hookFilePlacementRule,
+    "no-aliased-re-export": noAliasedReExportRule,
     "no-default-export-in-src": noDefaultExportInSrcRule,
     "no-reexports": noReexportsRule,
     "prefer-types-file": preferTypesFileRule,

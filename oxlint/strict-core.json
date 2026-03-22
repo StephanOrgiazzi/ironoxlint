@@ -87,6 +87,7 @@
     "import/no-relative-parent-imports": "error",
     "oxc/no-barrel-file": ["error", { "threshold": 0 }],
 
+    "ironlint-custom/no-aliased-re-export": "error",
     "ironlint-custom/no-reexports": "error",
     "ironlint-custom/no-default-export-in-src": "error",
     "typescript/consistent-type-imports": "error",
