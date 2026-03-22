@@ -1,6 +1,6 @@
 {
   "name": "ironoxlint",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Strict, opinionated shared Oxlint/Oxfmt config for React projects",
   "type": "module",
   "license": "MIT",
