@@ -1,7 +1,8 @@
 {
   "jsPlugins": [
     { "name": "sonarjs", "specifier": "eslint-plugin-sonarjs" },
-    { "name": "perfectionist", "specifier": "eslint-plugin-perfectionist" }
+    { "name": "perfectionist", "specifier": "eslint-plugin-perfectionist" },
+    { "name": "ironlint-custom", "specifier": "./strict-custom-rules.mjs" }
   ],
   "rules": {
     "curly": ["error", "all"],
@@ -80,6 +81,17 @@
     "sonarjs/no-dead-store": "error",
     "sonarjs/no-identical-conditions": "error",
     "sonarjs/no-duplicated-branches": "error",
-    "sonarjs/no-ignored-return": "error"
+    "sonarjs/no-ignored-return": "error",
+
+    "import/no-cycle": "error",
+    "import/no-relative-parent-imports": "error",
+    "oxc/no-barrel-file": ["error", { "threshold": 0 }],
+
+    "ironlint-custom/no-reexports": "error",
+    "ironlint-custom/no-default-export-in-src": "error",
+    "typescript/consistent-type-imports": "error",
+    "ironlint-custom/prefer-types-file": "error",
+    "ironlint-custom/hook-file-placement": "error",
+    "ironlint-custom/test-file-placement": "error"
   }
 }
