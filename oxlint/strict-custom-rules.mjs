@@ -1,3 +1,5 @@
+import path from "node:path";
+
 function getFilename(context) {
   return normalizePath(context.filename);
 }
@@ -189,7 +191,7 @@ const noReexportsRule = {
   },
   create(context) {
     const filePath = getFilename(context);
-    if (!isSrcFile(filePath) || isTestFile(filePath)) {
+    if (!isSrcFile(filePath)) {
       return {};
     }
 
@@ -225,7 +227,7 @@ const noAliasedReExportRule = {
   },
   create(context) {
     const filePath = getFilename(context);
-    if (!isSrcFile(filePath) || isTestFile(filePath)) {
+    if (!isSrcFile(filePath)) {
       return {};
     }
 
@@ -285,7 +287,7 @@ const noDefaultExportInSrcRule = {
   },
   create(context) {
     const filePath = getFilename(context);
-    if (!isSrcFile(filePath) || isTestFile(filePath)) {
+    if (!isSrcFile(filePath)) {
       return {};
     }
 

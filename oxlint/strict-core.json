@@ -53,9 +53,6 @@
     "ironlint-custom/no-aliased-re-export": "error",
     "ironlint-custom/no-reexports": "error",
     "ironlint-custom/no-default-export-in-src": "error",
-    "typescript/consistent-type-imports": "error",
-    "ironlint-custom/prefer-types-file": "error",
-    "ironlint-custom/hook-file-placement": "error",
-    "ironlint-custom/test-file-placement": "error"
+    "typescript/consistent-type-imports": "error"
   }
 }
