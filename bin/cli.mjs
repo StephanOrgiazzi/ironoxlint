@@ -14,6 +14,32 @@ const packageName = selfManifest.name;
 const packageVersion = selfManifest.version;
 const oxlintConfigPath = path.join(packageRoot, "oxlint", "strict-react.json");
 const oxfmtConfigPath = path.join(packageRoot, "oxfmt", "strict.json");
+const defaultIgnoredNames = new Set([
+  ".agents",
+  ".angular",
+  ".cache",
+  ".eslintcache",
+  ".expo",
+  ".git",
+  ".idea",
+  ".next",
+  ".nx",
+  ".parcel-cache",
+  ".svelte-kit",
+  ".turbo",
+  ".vscode",
+  "bower_components",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "storybook-static",
+  "target",
+  "temp",
+  "tmp",
+  "vendor",
+]);
 
 const lintScript = `${packageName} lint`;
 const formatScript = `${packageName} format`;
@@ -202,6 +228,47 @@ function printInitSummary(created, overwritten, skipped) {
   }
 }
 
+function getExistingIgnoreFiles(cwd) {
+  const candidates = [".gitignore", ".prettierignore"];
+  return candidates.filter((fileName) => fs.existsSync(path.join(cwd, fileName)));
+}
+
+function getTargetPaths(cwd) {
+  const entries = fs.readdirSync(cwd, { withFileTypes: true });
+  const targets = [];
+
+  for (const entry of entries) {
+    if (defaultIgnoredNames.has(entry.name)) {
+      continue;
+    }
+
+    targets.push(entry.name);
+  }
+
+  return targets.length > 0 ? targets : ["."];
+}
+
+function getOxlintArgs(cwd, modeArgs) {
+  const args = [...getTargetPaths(cwd), "-c", oxlintConfigPath, ...modeArgs];
+  const [gitignorePath] = getExistingIgnoreFiles(cwd);
+
+  if (gitignorePath) {
+    args.push("--ignore-path", gitignorePath);
+  }
+
+  return args;
+}
+
+function getOxfmtArgs(cwd, modeArgs) {
+  const args = [...getTargetPaths(cwd), "-c", oxfmtConfigPath, ...modeArgs];
+
+  for (const ignoreFile of getExistingIgnoreFiles(cwd)) {
+    args.push("--ignore-path", ignoreFile);
+  }
+
+  return args;
+}
+
 function runFormat(cwd) {
   const oxlintBin = findDependencyBin("oxlint");
   const oxfmtBin = findDependencyBin("oxfmt");
@@ -211,14 +278,14 @@ function runFormat(cwd) {
 
   const lintFixExit = runNodeScript(
     oxlintBin,
-    [".", "-c", oxlintConfigPath, "--fix", "--ignore-path", ".gitignore"],
+    getOxlintArgs(cwd, ["--fix"]),
     cwd,
   );
   if (lintFixExit !== 0) {
     return lintFixExit;
   }
 
-  return runNodeScript(oxfmtBin, [".", "-c", oxfmtConfigPath, "--ignore-path", ".gitignore"], cwd);
+  return runNodeScript(oxfmtBin, getOxfmtArgs(cwd, []), cwd);
 }
 
 function runLint(cwd) {
@@ -230,18 +297,14 @@ function runLint(cwd) {
 
   const lintExit = runNodeScript(
     oxlintBin,
-    [".", "-c", oxlintConfigPath, "--ignore-path", ".gitignore"],
+    getOxlintArgs(cwd, []),
     cwd,
   );
   if (lintExit !== 0) {
     return lintExit;
   }
 
-  return runNodeScript(
-    oxfmtBin,
-    [".", "-c", oxfmtConfigPath, "--check", "--ignore-path", ".gitignore"],
-    cwd,
-  );
+  return runNodeScript(oxfmtBin, getOxfmtArgs(cwd, ["--check"]), cwd);
 }
 
 function runNodeScript(scriptPath, args, cwd) {
