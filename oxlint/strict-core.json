@@ -1,8 +1,5 @@
 {
-  "jsPlugins": [
-    { "name": "sonarjs", "specifier": "eslint-plugin-sonarjs" },
-    { "name": "ironlint-custom", "specifier": "./strict-custom-rules.mjs" }
-  ],
+  "jsPlugins": [{ "name": "sonarjs", "specifier": "eslint-plugin-sonarjs" }],
   "rules": {
     "curly": ["error", "all"],
     "eqeqeq": ["error", "always"],
@@ -48,10 +45,6 @@
 
     "import/no-cycle": "error",
     "import/no-relative-parent-imports": "error",
-
-    "ironlint-custom/no-aliased-re-export": "error",
-    "ironlint-custom/no-reexports": "error",
-    "ironlint-custom/no-default-export-in-src": "error",
     "typescript/consistent-type-imports": "error"
   }
 }

@@ -1,0 +1,4 @@
+{
+  "plugins": ["import"],
+  "extends": ["./strict-core.json", "./strict-tests.json"]
+}

@@ -1,4 +1,0 @@
-{
-  "plugins": ["import"],
-  "extends": ["./strict-core.json", "./strict-react-rules.json", "./strict-tests.json"]
-}

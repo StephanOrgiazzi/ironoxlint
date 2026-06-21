@@ -1,14 +1,14 @@
 {
   "name": "ironoxlint",
-  "version": "0.9.9",
-  "description": "Strict, opinionated shared Oxlint/Oxfmt config for React projects",
+  "version": "1.0.0",
+  "description": "Strict, opinionated shared Oxlint/Oxfmt config for TypeScript projects",
   "keywords": [
     "formatter",
     "lint",
     "opinionated",
     "oxfmt",
     "oxlint",
-    "react"
+    "typescript"
   ],
   "license": "MIT",
   "bin": {
@@ -22,20 +22,23 @@
   ],
   "type": "module",
   "exports": {
-    "./oxlint/strict-react.json": "./oxlint/strict-react.json",
+    "./oxlint/strict.json": "./oxlint/strict.json",
     "./oxfmt/strict": "./oxfmt/strict.json"
   },
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "lint": "node bin/cli.mjs lint",
+    "format": "node bin/cli.mjs format"
+  },
   "dependencies": {
-    "eslint-plugin-react-you-might-not-need-an-effect": "^0.9.2",
     "eslint-plugin-sonarjs": "^4.0.2",
     "eslint-plugin-testing-library": "^7.16.0",
     "oxfmt": "^0.41.0",
     "oxlint": "^1.49.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

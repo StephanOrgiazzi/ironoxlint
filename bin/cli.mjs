@@ -5,23 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [, , command, ...rest] = process.argv;
+const [, , command, ...args] = process.argv;
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { name: packageName, version: packageVersion } = JSON.parse(
+  fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"),
+);
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const packageRoot = path.resolve(here, "..");
-const packageJsonPath = path.join(packageRoot, "package.json");
-const selfManifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
-const packageName = selfManifest.name;
-const packageVersion = selfManifest.version;
-const oxlintConfigPath = path.join(packageRoot, "oxlint", "strict-react.json");
+const oxlintConfigPath = path.join(packageRoot, "oxlint", "strict.json");
 const oxfmtConfigPath = path.join(packageRoot, "oxfmt", "strict.json");
-const localOxlintConfigNames = [
-  ".oxlintrc.json",
-  ".oxlintrc.jsonc",
-  "oxlint.config.json",
-  "oxlint.config.jsonc",
-];
-const defaultIgnoredNames = new Set([
+const ignoredTargets = new Set([
   ".agents",
   ".angular",
   ".cache",
@@ -48,147 +40,152 @@ const defaultIgnoredNames = new Set([
   "vendor",
 ]);
 
-const lintScript = `${packageName} lint`;
-const formatScript = `${packageName} format`;
-
-function applyScriptUpdates(manifest, force) {
-  const updates = [
-    ["lint", lintScript],
-    ["format", formatScript],
-  ];
-  const created = [];
-  const overwritten = [];
-  const skipped = [];
-
-  for (const [key, value] of updates) {
-    const current = manifest.scripts[key];
-
-    if (typeof current === "undefined") {
-      manifest.scripts[key] = value;
-      created.push(key);
-      continue;
-    }
-
-    if (current === value) {
-      skipped.push(key);
-      continue;
-    }
-
-    if (!force) {
-      skipped.push(key);
-      continue;
-    }
-
-    manifest.scripts[key] = value;
-    overwritten.push(key);
-  }
-
-  return { created, overwritten, skipped };
-}
-
 function detectPackageManager(cwd) {
-  if (fs.existsSync(path.join(cwd, "bun.lock")) || fs.existsSync(path.join(cwd, "bun.lockb"))) {
+  if (exists(cwd, "bun.lock") || exists(cwd, "bun.lockb")) {
     return "bun";
   }
-  if (fs.existsSync(path.join(cwd, "pnpm-lock.yaml"))) {
+  if (exists(cwd, "pnpm-lock.yaml")) {
     return "pnpm";
   }
-  if (fs.existsSync(path.join(cwd, "yarn.lock"))) {
+  if (exists(cwd, "yarn.lock")) {
     return "yarn";
   }
   return "npm";
 }
 
-function ensureObjectProperty(target, key) {
-  if (!target[key] || typeof target[key] !== "object") {
-    target[key] = {};
-  }
+function exists(cwd, fileName) {
+  return fs.existsSync(path.join(cwd, fileName));
 }
 
-function findDependencyBin(packageId) {
+function findDependencyCommand(packageId) {
   let cursor = packageRoot;
   const relativeBinPath = path.join(packageId, "bin", packageId);
 
   while (true) {
-    const candidate = path.join(cursor, "node_modules", relativeBinPath);
-    if (fs.existsSync(candidate)) {
-      return candidate;
+    const binPath = path.join(cursor, "node_modules", relativeBinPath);
+    if (fs.existsSync(binPath)) {
+      return {
+        args: [binPath],
+        command: process.execPath,
+        shell: false,
+      };
     }
 
     const parent = path.dirname(cursor);
     if (parent === cursor) {
-      break;
+      return {
+        args: [],
+        command: packageId,
+        shell: process.platform === "win32",
+      };
     }
     cursor = parent;
   }
-
-  process.stderr.write(
-    `Could not resolve ${packageId} binary from ${packageName}. Reinstall dependencies and retry.\n`,
-  );
-  return null;
 }
 
-function initProject(args) {
+function getExistingIgnoreFiles(cwd) {
+  return [".gitignore", ".prettierignore"].filter((fileName) => exists(cwd, fileName));
+}
+
+function getLocalOxlintConfigPath(cwd) {
+  return [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.json", "oxlint.config.jsonc"]
+    .map((fileName) => path.join(cwd, fileName))
+    .find((filePath) => fs.existsSync(filePath));
+}
+
+function getLocalOxfmtConfigPath(cwd) {
+  return [
+    ".oxfmtrc.json",
+    ".oxfmtrc.jsonc",
+    "oxfmt.config.json",
+    "oxfmt.config.jsonc",
+    "oxfmt.config.js",
+    "oxfmt.config.mjs",
+    "oxfmt.config.cjs",
+    "oxfmt.config.ts",
+  ]
+    .map((fileName) => path.join(cwd, fileName))
+    .find((filePath) => fs.existsSync(filePath));
+}
+
+function getTargetPaths(cwd) {
+  const targets = fs
+    .readdirSync(cwd, { withFileTypes: true })
+    .filter((entry) => !ignoredTargets.has(entry.name))
+    .map((entry) => entry.name);
+
+  return targets.length > 0 ? targets : ["."];
+}
+
+function initProject() {
   const cwd = process.cwd();
   const force = args.includes("--force");
-  const cwdPackageJson = path.join(cwd, "package.json");
-  const manifest = parseManifestFile(cwdPackageJson);
+  const manifestPath = path.join(cwd, "package.json");
+  const manifest = readManifest(manifestPath);
   if (!manifest) {
     return 1;
   }
 
-  ensureObjectProperty(manifest, "scripts");
-  ensureObjectProperty(manifest, "devDependencies");
+  manifest.scripts = objectValue(manifest.scripts);
+  manifest.devDependencies = objectValue(manifest.devDependencies);
 
-  const { created, overwritten, skipped } = applyScriptUpdates(manifest, force);
+  const summary = updateScripts(manifest, force);
   const dependencyChanged = updateSelfDependency(manifest);
 
-  if (created.length === 0 && overwritten.length === 0 && !dependencyChanged) {
+  if (!summary.changed && !dependencyChanged) {
     process.stdout.write(
       "No changes applied. Use --force to overwrite existing lint/format scripts.\n",
     );
     return 0;
   }
 
-  fs.writeFileSync(cwdPackageJson, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  printInitSummary(created, overwritten, skipped);
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  printInitSummary(summary);
 
-  if (!dependencyChanged) {
-    return 0;
-  }
-
-  return installSelf(cwd);
+  return dependencyChanged ? installSelf(cwd) : 0;
 }
 
 function installSelf(cwd) {
   const manager = detectPackageManager(cwd);
-  let command = "";
-  let args = [];
+  const dependency = `${packageName}@${packageVersion}`;
+  const installCommands = {
+    bun: ["bun", ["add", "-d", dependency]],
+    npm: ["npm", ["i", "-D", dependency]],
+    pnpm: ["pnpm", ["add", "-D", dependency]],
+    yarn: ["yarn", ["add", "-D", dependency]],
+  };
+  const [installCommand, installArgs] = installCommands[manager];
 
-  if (manager === "bun") {
-    command = "bun";
-    args = ["add", "-d", `${packageName}@${packageVersion}`];
-  } else if (manager === "pnpm") {
-    command = "pnpm";
-    args = ["add", "-D", `${packageName}@${packageVersion}`];
-  } else if (manager === "yarn") {
-    command = "yarn";
-    args = ["add", "-D", `${packageName}@${packageVersion}`];
-  } else {
-    command = "npm";
-    args = ["i", "-D", `${packageName}@${packageVersion}`];
-  }
-
-  process.stdout.write(`Installing ${packageName}@${packageVersion} with ${manager}...\n`);
-  const result = spawnSync(command, args, {
-    cwd,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
-  return typeof result.status === "number" ? result.status : 1;
+  process.stdout.write(`Installing ${dependency} with ${manager}...\n`);
+  return runProcess(installCommand, installArgs, cwd, process.platform === "win32");
 }
 
-function parseManifestFile(filePath) {
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function printHelp() {
+  process.stdout.write(
+    ["Usage:", "  ironoxlint init [--force]", "  ironoxlint lint", "  ironoxlint format", ""].join(
+      "\n",
+    ),
+  );
+}
+
+function printInitSummary({ created, overwritten, skipped }) {
+  process.stdout.write("Updated package.json scripts.\n");
+  printList("Created", created);
+  printList("Overwritten", overwritten);
+  printList("Skipped", skipped);
+}
+
+function printList(label, values) {
+  if (values.length > 0) {
+    process.stdout.write(`${label}: ${values.join(", ")}\n`);
+  }
+}
+
+function readManifest(filePath) {
   if (!fs.existsSync(filePath)) {
     process.stderr.write(
       "No package.json found in current directory. Run this command at your project root.\n",
@@ -204,107 +201,54 @@ function parseManifestFile(filePath) {
   }
 }
 
-function printHelp() {
-  process.stdout.write(
-    [
-      "Usage:",
-      "  ironoxlint init [--force]",
-      "  ironoxlint lint",
-      "  ironoxlint format",
-      "",
-      "Examples:",
-      "  ironoxlint init",
-      "  ironoxlint init --force",
-      "  ironoxlint lint",
-      "  ironoxlint format",
-      "",
-    ].join("\n"),
+function runCommand(mode) {
+  const cwd = process.cwd();
+  const oxlintCommand = findDependencyCommand("oxlint");
+  const oxfmtCommand = findDependencyCommand("oxfmt");
+
+  const lintExit = runOxlint(cwd, oxlintCommand, mode === "format" ? ["--fix"] : []);
+  if (lintExit !== 0) {
+    return lintExit;
+  }
+
+  if (mode === "lint") {
+    return 0;
+  }
+
+  return runTool(oxfmtCommand, getOxfmtArgs(cwd), cwd);
+}
+
+function runTool(toolCommand, toolArgs, cwd) {
+  return runProcess(
+    toolCommand.command,
+    [...toolCommand.args, ...toolArgs],
+    cwd,
+    toolCommand.shell,
   );
 }
 
-function printInitSummary(created, overwritten, skipped) {
-  process.stdout.write("Updated package.json scripts.\n");
-  if (created.length > 0) {
-    process.stdout.write(`Created: ${created.join(", ")}\n`);
-  }
-  if (overwritten.length > 0) {
-    process.stdout.write(`Overwritten: ${overwritten.join(", ")}\n`);
-  }
-  if (skipped.length > 0) {
-    process.stdout.write(`Skipped: ${skipped.join(", ")}\n`);
+function runOxlint(cwd, oxlintCommand, modeArgs) {
+  const { configPath, cleanup } = resolveOxlintConfig(cwd);
+
+  try {
+    return runTool(oxlintCommand, getOxlintArgs(cwd, configPath, modeArgs), cwd);
+  } finally {
+    cleanup();
   }
 }
 
-function getExistingIgnoreFiles(cwd) {
-  const candidates = [".gitignore", ".prettierignore"];
-  return candidates.filter((fileName) => fs.existsSync(path.join(cwd, fileName)));
+function runProcess(processCommand, processArgs, cwd, shell) {
+  const result = spawnSync(processCommand, processArgs, {
+    cwd,
+    shell,
+    stdio: "inherit",
+  });
+  return typeof result.status === "number" ? result.status : 1;
 }
 
-function getLocalOxlintConfigPath(cwd) {
-  for (const configName of localOxlintConfigNames) {
-    const configPath = path.join(cwd, configName);
-    if (fs.existsSync(configPath)) {
-      return configPath;
-    }
-  }
-
-  return null;
-}
-
-function toConfigPath(filePath) {
-  return path.resolve(filePath).split(path.sep).join("/");
-}
-
-function createMergedOxlintConfig(cwd) {
-  const localConfigPath = getLocalOxlintConfigPath(cwd);
-  if (!localConfigPath) {
-    return { configPath: oxlintConfigPath, cleanup: () => {} };
-  }
-
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ironoxlint-"));
-  const configPath = path.join(tempDir, "oxlint.config.json");
-  const config = {
-    extends: [toConfigPath(oxlintConfigPath), toConfigPath(localConfigPath)],
-  };
-
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-
-  return {
-    configPath,
-    cleanup() {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    },
-  };
-}
-
-function getTargetPaths(cwd) {
-  const entries = fs.readdirSync(cwd, { withFileTypes: true });
-  const targets = [];
-
-  for (const entry of entries) {
-    if (defaultIgnoredNames.has(entry.name)) {
-      continue;
-    }
-
-    targets.push(entry.name);
-  }
-
-  return targets.length > 0 ? targets : ["."];
-}
-
-function getOxlintArgs(cwd, configPath, modeArgs) {
-  const args = [...getTargetPaths(cwd), "-c", configPath, ...modeArgs];
-  const [gitignorePath] = getExistingIgnoreFiles(cwd);
-
-  if (gitignorePath) {
-    args.push("--ignore-path", gitignorePath);
-  }
-
-  return args;
-}
-
-function getOxfmtArgs(cwd, modeArgs) {
-  const args = [...getTargetPaths(cwd), "-c", oxfmtConfigPath, ...modeArgs];
+function getOxfmtArgs(cwd) {
+  const configPath = getLocalOxfmtConfigPath(cwd) ?? oxfmtConfigPath;
+  const args = [...getTargetPaths(cwd), "-c", configPath];
 
   for (const ignoreFile of getExistingIgnoreFiles(cwd)) {
     args.push("--ignore-path", ignoreFile);
@@ -313,74 +257,83 @@ function getOxfmtArgs(cwd, modeArgs) {
   return args;
 }
 
-function runOxlint(cwd, oxlintBin, modeArgs) {
-  const oxlintConfig = createMergedOxlintConfig(cwd);
+function getOxlintArgs(cwd, configPath, modeArgs) {
+  const args = [...getTargetPaths(cwd), "-c", configPath, ...modeArgs];
+  const [ignoreFile] = getExistingIgnoreFiles(cwd);
 
-  try {
-    return runNodeScript(oxlintBin, getOxlintArgs(cwd, oxlintConfig.configPath, modeArgs), cwd);
-  } finally {
-    oxlintConfig.cleanup();
+  if (ignoreFile) {
+    args.push("--ignore-path", ignoreFile);
   }
+
+  return args;
 }
 
-function runFormat(cwd) {
-  const oxlintBin = findDependencyBin("oxlint");
-  const oxfmtBin = findDependencyBin("oxfmt");
-  if (!oxlintBin || !oxfmtBin) {
-    return 1;
+function resolveOxlintConfig(cwd) {
+  const localConfigPath = getLocalOxlintConfigPath(cwd);
+  if (!localConfigPath) {
+    return { configPath: oxlintConfigPath, cleanup: () => {} };
   }
 
-  const lintFixExit = runOxlint(cwd, oxlintBin, ["--fix"]);
-  if (lintFixExit !== 0) {
-    return lintFixExit;
-  }
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ironoxlint-"));
+  const configPath = path.join(tempDir, "oxlint.config.json");
+  const toConfigPath = (filePath) => path.resolve(filePath).split(path.sep).join("/");
 
-  return runNodeScript(oxfmtBin, getOxfmtArgs(cwd, []), cwd);
+  fs.writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      { extends: [toConfigPath(oxlintConfigPath), toConfigPath(localConfigPath)] },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  return {
+    configPath,
+    cleanup: () => fs.rmSync(tempDir, { recursive: true, force: true }),
+  };
 }
 
-function runLint(cwd) {
-  const oxlintBin = findDependencyBin("oxlint");
-  const oxfmtBin = findDependencyBin("oxfmt");
-  if (!oxlintBin || !oxfmtBin) {
-    return 1;
+function updateScripts(manifest, force) {
+  const summary = { changed: false, created: [], overwritten: [], skipped: [] };
+
+  for (const [key, value] of [
+    ["lint", `${packageName} lint`],
+    ["format", `${packageName} format`],
+  ]) {
+    const current = manifest.scripts[key];
+
+    if (typeof current === "undefined") {
+      manifest.scripts[key] = value;
+      summary.created.push(key);
+      summary.changed = true;
+    } else if (current === value || !force) {
+      summary.skipped.push(key);
+    } else {
+      manifest.scripts[key] = value;
+      summary.overwritten.push(key);
+      summary.changed = true;
+    }
   }
 
-  const lintExit = runOxlint(cwd, oxlintBin, []);
-  if (lintExit !== 0) {
-    return lintExit;
-  }
-
-  return runNodeScript(oxfmtBin, getOxfmtArgs(cwd, ["--check"]), cwd);
-}
-
-function runNodeScript(scriptPath, args, cwd) {
-  const result = spawnSync(process.execPath, [scriptPath, ...args], {
-    cwd,
-    stdio: "inherit",
-  });
-  return typeof result.status === "number" ? result.status : 1;
+  return summary;
 }
 
 function updateSelfDependency(manifest) {
-  const currentVersion = manifest.devDependencies[packageName];
   const requiredVersion = `^${packageVersion}`;
-  const dependencyChanged = currentVersion !== requiredVersion;
-
-  if (dependencyChanged) {
-    manifest.devDependencies[packageName] = requiredVersion;
+  if (manifest.devDependencies[packageName] === requiredVersion) {
+    return false;
   }
 
-  return dependencyChanged;
+  manifest.devDependencies[packageName] = requiredVersion;
+  return true;
 }
 
 if (command === "init") {
-  process.exit(initProject(rest));
+  process.exit(initProject());
 }
-if (command === "lint") {
-  process.exit(runLint(process.cwd()));
-}
-if (command === "format") {
-  process.exit(runFormat(process.cwd()));
+if (command === "lint" || command === "format") {
+  process.exit(runCommand(command));
 }
 
 printHelp();

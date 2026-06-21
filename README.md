@@ -2,20 +2,17 @@
 
 ![ironoxlint logo](https://raw.githubusercontent.com/StephanOrgiazzi/ironoxlint/master/assets/logo/ironoxlint-logo.svg)
 
-`ironoxlint` is a strict, opinionated linting setup that helps AI agents write maintainable, production-grade code.
+`ironoxlint` is a strict, opinionated Oxlint/Oxfmt setup for TypeScript projects.
 
-Most repos are hard for agents (and developers) for one reason: too many unwritten conventions.
-Rules live in people’s heads, feedback comes late, and structure is inconsistent.
+It gives a project fast, shared defaults for code quality and formatting without
+copying lint config between repos.
 
-`ironoxlint` fixes that with one goal: make your codebase predictable, navigable, and machine-checkable.
+- Strict TypeScript-focused Oxlint rules for readability and maintainability
+- Fast local feedback through `lint`
+- One explicit formatting command through `format`
+- Local Oxlint/Oxfmt config files can narrow behavior when a project needs it
 
-- Opinionated strict rules for readability and maintainability
-- Fast local feedback (`lint` + `format`) without waiting for CI
-- One-step adoption, minimal setup friction
-
-Use it to make your repo easier to scale with humans and agents alike.
-
-## One-step Setup
+## Setup
 
 ```bash
 npx ironoxlint init
@@ -33,15 +30,6 @@ Then run:
 npm run lint
 npm run format
 ```
-
-## Local Oxlint Overrides
-
-IronOx runs Oxlint through its wrapper so bundled plugin dependencies resolve reliably.
-
-If a project needs a narrow override, add `.oxlintrc.json`, `.oxlintrc.jsonc`,
-`oxlint.config.json`, or `oxlint.config.jsonc` at the project root. The wrapper loads
-IronOx's strict config first and the local config second, so local `rules`,
-`overrides`, `settings`, and `ignorePatterns` can intentionally narrow the defaults.
 
 `ironoxlint init` adds or merges these scripts into your `package.json`:
 
@@ -61,6 +49,17 @@ If `lint` or `format` already exist, they are not overwritten unless you run:
 ```bash
 npx ironoxlint init --force
 ```
+
+## Local Overrides
+
+IronOx runs Oxlint through its wrapper so bundled plugin dependencies resolve reliably.
+
+If a project needs a narrow Oxlint override, add `.oxlintrc.json`, `.oxlintrc.jsonc`,
+`oxlint.config.json`, or `oxlint.config.jsonc` at the project root. The wrapper loads
+IronOx's strict config first and the local config second.
+
+For formatting, `ironoxlint format` uses a project-local Oxfmt config when present,
+otherwise it falls back to IronOx's empty Oxfmt config and Oxfmt defaults.
 
 ## Publish
 
