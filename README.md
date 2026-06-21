@@ -34,6 +34,15 @@ npm run lint
 npm run format
 ```
 
+## Local Oxlint Overrides
+
+IronOx runs Oxlint through its wrapper so bundled plugin dependencies resolve reliably.
+
+If a project needs a narrow override, add `.oxlintrc.json`, `.oxlintrc.jsonc`,
+`oxlint.config.json`, or `oxlint.config.jsonc` at the project root. The wrapper loads
+IronOx's strict config first and the local config second, so local `rules`,
+`overrides`, `settings`, and `ignorePatterns` can intentionally narrow the defaults.
+
 `ironoxlint init` adds or merges these scripts into your `package.json`:
 
 ```json

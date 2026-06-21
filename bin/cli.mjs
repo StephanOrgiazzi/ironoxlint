@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +15,12 @@ const packageName = selfManifest.name;
 const packageVersion = selfManifest.version;
 const oxlintConfigPath = path.join(packageRoot, "oxlint", "strict-react.json");
 const oxfmtConfigPath = path.join(packageRoot, "oxfmt", "strict.json");
+const localOxlintConfigNames = [
+  ".oxlintrc.json",
+  ".oxlintrc.jsonc",
+  "oxlint.config.json",
+  "oxlint.config.jsonc",
+];
 const defaultIgnoredNames = new Set([
   ".agents",
   ".angular",
@@ -233,6 +240,43 @@ function getExistingIgnoreFiles(cwd) {
   return candidates.filter((fileName) => fs.existsSync(path.join(cwd, fileName)));
 }
 
+function getLocalOxlintConfigPath(cwd) {
+  for (const configName of localOxlintConfigNames) {
+    const configPath = path.join(cwd, configName);
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
+  }
+
+  return null;
+}
+
+function toConfigPath(filePath) {
+  return path.resolve(filePath).split(path.sep).join("/");
+}
+
+function createMergedOxlintConfig(cwd) {
+  const localConfigPath = getLocalOxlintConfigPath(cwd);
+  if (!localConfigPath) {
+    return { configPath: oxlintConfigPath, cleanup: () => {} };
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ironoxlint-"));
+  const configPath = path.join(tempDir, "oxlint.config.json");
+  const config = {
+    extends: [toConfigPath(oxlintConfigPath), toConfigPath(localConfigPath)],
+  };
+
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  return {
+    configPath,
+    cleanup() {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    },
+  };
+}
+
 function getTargetPaths(cwd) {
   const entries = fs.readdirSync(cwd, { withFileTypes: true });
   const targets = [];
@@ -248,8 +292,8 @@ function getTargetPaths(cwd) {
   return targets.length > 0 ? targets : ["."];
 }
 
-function getOxlintArgs(cwd, modeArgs) {
-  const args = [...getTargetPaths(cwd), "-c", oxlintConfigPath, ...modeArgs];
+function getOxlintArgs(cwd, configPath, modeArgs) {
+  const args = [...getTargetPaths(cwd), "-c", configPath, ...modeArgs];
   const [gitignorePath] = getExistingIgnoreFiles(cwd);
 
   if (gitignorePath) {
@@ -269,6 +313,16 @@ function getOxfmtArgs(cwd, modeArgs) {
   return args;
 }
 
+function runOxlint(cwd, oxlintBin, modeArgs) {
+  const oxlintConfig = createMergedOxlintConfig(cwd);
+
+  try {
+    return runNodeScript(oxlintBin, getOxlintArgs(cwd, oxlintConfig.configPath, modeArgs), cwd);
+  } finally {
+    oxlintConfig.cleanup();
+  }
+}
+
 function runFormat(cwd) {
   const oxlintBin = findDependencyBin("oxlint");
   const oxfmtBin = findDependencyBin("oxfmt");
@@ -276,11 +330,7 @@ function runFormat(cwd) {
     return 1;
   }
 
-  const lintFixExit = runNodeScript(
-    oxlintBin,
-    getOxlintArgs(cwd, ["--fix"]),
-    cwd,
-  );
+  const lintFixExit = runOxlint(cwd, oxlintBin, ["--fix"]);
   if (lintFixExit !== 0) {
     return lintFixExit;
   }
@@ -295,11 +345,7 @@ function runLint(cwd) {
     return 1;
   }
 
-  const lintExit = runNodeScript(
-    oxlintBin,
-    getOxlintArgs(cwd, []),
-    cwd,
-  );
+  const lintExit = runOxlint(cwd, oxlintBin, []);
   if (lintExit !== 0) {
     return lintExit;
   }
